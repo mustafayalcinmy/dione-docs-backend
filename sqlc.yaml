@@ -1,0 +1,8 @@
+version: "2"
+sql:
+  - engine: "postgresql"
+    queries: "db/queries/"   # Directory containing the SQL query files (btc.sql, chat.sql, etc.)
+    schema: "db/schema.sql"  # Path to the schema file (not a directory)
+    gen:
+      go:
+        out: "internal/database"  # Output directory for the generated Go models
