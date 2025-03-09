@@ -1,0 +1,39 @@
+.
+├── cmd
+│   └── main.go
+├── deployments
+├── go.mod
+├── go.sum
+├── internal
+│   ├── api
+│   │   ├── handlers
+│   │   │   ├── auth_handler.go
+│   │   │   └── user_handler.go
+│   │   ├── middlewares
+│   │   │   ├── cors_middleware.go
+│   │   │   ├── jwt_middleware.go
+│   │   │   └── role.go
+│   │   └── router.go
+│   ├── app
+│   │   └── app.go
+│   ├── config
+│   │   └── config.go
+│   ├── models
+│   │   ├── document.go
+│   │   ├── permission.go
+│   │   └── user.go
+│   ├── repository
+│   │   ├── document_repository.go
+│   │   ├── generic_repository.go
+│   │   ├── permission_repository.go
+│   │   ├── repository.go
+│   │   └── user_repository.go
+│   ├── services
+│   │   └── service.go
+│   └── utils
+│       ├── database.go
+│       └── generate_token.go
+├── l.txt
+└── scripts
+
+14 directories, 23 files
