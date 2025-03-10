@@ -1,4 +1,3 @@
-// internal/api/router.go
 package api
 
 import (
@@ -39,9 +38,31 @@ func (r *Router) setupMiddlewares() {
 }
 
 func (r *Router) setupRoutes() {
+	authHandler := handlers.NewAuthHandler(r.repository, r.config)
+	docHandler := handlers.NewDocumentHandler(r.repository)
+	permHandler := handlers.NewPermissionHandler(r.repository)
+
 	api := r.engine.Group("/api/v1")
 	{
-		api.POST("/register", handlers.RegisterHandler(r.repository.User, r.config))
-		api.POST("/login", handlers.LoginHandler(r.repository.User, r.config))
+		api.POST("/register", authHandler.RegisterHandler)
+		api.POST("/login", authHandler.LoginHandler)
 	}
+
+	docs := api.Group("/documents")
+	{
+		docs.POST("", docHandler.CreateDocument)
+		docs.GET("", docHandler.GetUserDocuments)
+		docs.GET("/:id", docHandler.GetDocument)
+		docs.PUT("/:id", docHandler.UpdateDocument)
+		docs.DELETE("/:id", docHandler.DeleteDocument)
+		docs.GET("/:id/versions", docHandler.GetDocumentVersions)
+	}
+
+	perms := api.Group("/permissions")
+	{
+		perms.POST("/documents/:id/share", permHandler.ShareDocument)
+		perms.DELETE("/documents/:id/access", permHandler.RemoveAccess)
+		perms.GET("/documents/:id", permHandler.GetDocumentPermissions)
+	}
+
 }

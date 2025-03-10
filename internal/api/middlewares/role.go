@@ -29,13 +29,13 @@ func RequireRole(repo repository.PermissionRepository, requiredRole string, docI
 			return
 		}
 
-		perm, err := repo.GetByUserAndDocument(userID, docID)
+		perm, err := repo.GetByDocumentAndUser(userID, docID)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Insufficient permissions"})
 			return
 		}
 
-		if perm.AccessLevel != requiredRole {
+		if perm.AccessType != requiredRole {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "Insufficient permissions"})
 			return
 		}
