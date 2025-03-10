@@ -41,7 +41,7 @@ func (r *Router) setupMiddlewares() {
 func (r *Router) setupRoutes() {
 	api := r.engine.Group("/api/v1")
 	{
-		api.POST("/register", handlers.RegisterHandler(r.repository.User))
+		api.POST("/register", handlers.RegisterHandler(r.repository.User, r.config))
 		api.POST("/login", handlers.LoginHandler(r.repository.User, r.config))
 	}
 }

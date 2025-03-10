@@ -28,6 +28,10 @@ type LoginResponse struct {
 	Token string `json:"token"`
 }
 
+type RegisterResponse struct {
+	Token string `json:"token"`
+}
+
 type ErrorResponse struct {
 	Error string `json:"error"`
 }
@@ -65,7 +69,7 @@ func LoginHandler(repo repository.UserRepository, cfg *config.Config) gin.Handle
 	}
 }
 
-func RegisterHandler(repo repository.UserRepository) gin.HandlerFunc {
+func RegisterHandler(repo repository.UserRepository, cfg *config.Config) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var req RegisterRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
@@ -97,6 +101,16 @@ func RegisterHandler(repo repository.UserRepository) gin.HandlerFunc {
 			return
 		}
 
-		c.JSON(http.StatusCreated, gin.H{"message": "User registered successfully"})
+		token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
+			"user_id": user.ID.String(),
+			"exp":     time.Now().Add(time.Hour * 24).Unix(), // Token expires in 24 hours
+		})
+		tokenString, err := token.SignedString([]byte(cfg.JWTSecret))
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Failed to generate token"})
+			return
+		}
+
+		c.JSON(http.StatusCreated, RegisterResponse{Token: tokenString})
 	}
 }
