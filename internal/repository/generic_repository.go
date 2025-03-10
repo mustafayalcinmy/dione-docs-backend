@@ -19,5 +19,6 @@ func (r *GenericRepository[T]) Delete(entity *T) error {
 }
 
 func (r *GenericRepository[T]) GetByID(id any, entity *T) error {
-	return r.db.First(entity, id).Error
+	result := r.db.First(entity, id)
+	return result.Error
 }
