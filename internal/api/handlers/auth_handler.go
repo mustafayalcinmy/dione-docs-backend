@@ -48,6 +48,17 @@ type ErrorResponse struct {
 	Error string `json:"error"`
 }
 
+// LoginHandler godoc
+// @Summary Login endpoint
+// @Description Authenticates a user and returns a JWT token.
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Param login body LoginRequest true "Login credentials"
+// @Success 200 {object} LoginResponse
+// @Failure 400 {object} ErrorResponse "Invalid request data"
+// @Failure 401 {object} ErrorResponse "Invalid credentials"
+// @Router /api/v1/login [post]
 func (h *AuthHandler) LoginHandler(c *gin.Context) {
 	var req LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -79,6 +90,17 @@ func (h *AuthHandler) LoginHandler(c *gin.Context) {
 	c.JSON(http.StatusOK, LoginResponse{Token: tokenString})
 }
 
+// RegisterHandler godoc
+// @Summary Register endpoint
+// @Description Registers a new user and returns a JWT token.
+// @Tags Auth
+// @Accept json
+// @Produce json
+// @Param register body RegisterRequest true "Registration data"
+// @Success 201 {object} RegisterResponse
+// @Failure 400 {object} ErrorResponse "Invalid request data"
+// @Failure 409 {object} ErrorResponse "Email already in use"
+// @Router /api/v1/register [post]
 func (h *AuthHandler) RegisterHandler(c *gin.Context) {
 	var req RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

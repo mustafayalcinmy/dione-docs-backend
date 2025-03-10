@@ -6,6 +6,10 @@ import (
 	"github.com/dione-docs-backend/internal/config"
 	"github.com/dione-docs-backend/internal/repository"
 	"github.com/gin-gonic/gin"
+
+	_ "github.com/dione-docs-backend/docs"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 )
 
 type Router struct {
@@ -65,4 +69,5 @@ func (r *Router) setupRoutes() {
 		perms.GET("/documents/:id", permHandler.GetDocumentPermissions)
 	}
 
+	r.engine.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 }

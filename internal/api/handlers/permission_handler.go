@@ -41,6 +41,20 @@ func NewPermissionHandler(repo *repository.Repository) *PermissionHandler {
 	}
 }
 
+// @Tags Permissions
+// @Summary Share a document with a user
+// @Description Share a document with a user by providing the access type (read, edit, admin)
+// @Accept json
+// @Produce json
+// @Param id path string true "Document ID"
+// @Param ShareDocumentRequest body ShareDocumentRequest true "Share document request"
+// @Success 201 {object} PermissionResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 403 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /documents/{id}/permissions/share [post]
 func (h *PermissionHandler) ShareDocument(c *gin.Context) {
 	docIDStr := c.Param("id")
 	docID, err := uuid.Parse(docIDStr)
@@ -123,6 +137,20 @@ func (h *PermissionHandler) ShareDocument(c *gin.Context) {
 	c.JSON(http.StatusCreated, response)
 }
 
+// @Tags Permissions
+// @Summary Remove a user's access to a document
+// @Description Remove a specific user's access to a document
+// @Accept json
+// @Produce json
+// @Param id path string true "Document ID"
+// @Param RemoveAccessRequest body RemoveAccessRequest true "Remove access request"
+// @Success 200 {object} MessageResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 403 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /documents/{id}/permissions/remove [post]
 func (h *PermissionHandler) RemoveAccess(c *gin.Context) {
 	docIDStr := c.Param("id")
 	docID, err := uuid.Parse(docIDStr)
@@ -171,6 +199,19 @@ func (h *PermissionHandler) RemoveAccess(c *gin.Context) {
 	c.JSON(http.StatusOK, MessageResponse{Message: "Erişim başarıyla kaldırıldı"})
 }
 
+// @Tags Permissions
+// @Summary Get permissions of a document
+// @Description Get all permissions for a specific document
+// @Accept json
+// @Produce json
+// @Param id path string true "Document ID"
+// @Success 200 {array} PermissionResponse
+// @Failure 400 {object} ErrorResponse
+// @Failure 401 {object} ErrorResponse
+// @Failure 403 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Failure 500 {object} ErrorResponse
+// @Router /documents/{id}/permissions [get]
 func (h *PermissionHandler) GetDocumentPermissions(c *gin.Context) {
 	docIDStr := c.Param("id")
 	docID, err := uuid.Parse(docIDStr)
