@@ -23,6 +23,8 @@ require (
 	github.com/bytedance/sonic v1.13.1 // indirect
 	github.com/bytedance/sonic/loader v0.2.4 // indirect
 	github.com/cloudwego/base64x v0.1.5 // indirect
+	github.com/fumiama/go-docx v0.0.0-20241231153056-9f8f327c74a5 // indirect
+	github.com/fumiama/imgsz v0.0.2 // indirect
 	github.com/gabriel-vasile/mimetype v1.4.8 // indirect
 	github.com/gin-contrib/sse v1.0.0 // indirect
 	github.com/go-openapi/jsonpointer v0.21.0 // indirect
@@ -33,6 +35,7 @@ require (
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/go-playground/validator/v10 v10.25.0 // indirect
 	github.com/goccy/go-json v0.10.5 // indirect
+	github.com/gomutex/godocx v0.1.5 // indirect
 	github.com/jackc/pgpassfile v1.0.0 // indirect
 	github.com/jackc/pgservicefile v0.0.0-20221227161230-091c0ba34f0a // indirect
 	github.com/jackc/pgx/v5 v5.5.5 // indirect

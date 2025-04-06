@@ -208,6 +208,60 @@
                         }
                     }
                 }
+            },
+            "delete": {
+                "description": "Delete an existing document by its unique identifier",
+                "tags": [
+                    "Documents"
+                ],
+                "summary": "Delete a document by ID",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Document ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Document deleted successfully",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.MessageResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Invalid document ID",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Authentication error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "403": {
+                        "description": "Access denied",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "404": {
+                        "description": "Document not found",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
             }
         },
         "/api/v1/documents/{id}/versions": {
@@ -262,6 +316,56 @@
                     },
                     "500": {
                         "description": "Internal server error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v1/import/docx": {
+            "post": {
+                "description": "Uploads a DOCX file and converts it into a new document.",
+                "consumes": [
+                    "multipart/form-data"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Documents"
+                ],
+                "summary": "Import a DOCX document",
+                "parameters": [
+                    {
+                        "type": "file",
+                        "description": "DOCX file to import",
+                        "name": "file",
+                        "in": "formData",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Document imported successfully",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.DocumentResponse"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad request (e.g., no file, wrong type)",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "401": {
+                        "description": "Authentication error",
+                        "schema": {
+                            "$ref": "#/definitions/handlers.ErrorResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal server error (parsing, saving)",
                         "schema": {
                             "$ref": "#/definitions/handlers.ErrorResponse"
                         }

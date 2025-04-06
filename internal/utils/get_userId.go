@@ -8,7 +8,7 @@ import (
 )
 
 func GetUserIDFromContext(c *gin.Context) (uuid.UUID, error) {
-	userIDStr, exists := c.Get("userID")
+	userIDStr, exists := c.Get("user_id")
 	if !exists {
 		return uuid.Nil, errors.New("kullanıcı kimliği bulunamadı")
 	}
@@ -18,5 +18,9 @@ func GetUserIDFromContext(c *gin.Context) (uuid.UUID, error) {
 		return uuid.Nil, errors.New("geçersiz kullanıcı kimliği formatı")
 	}
 
-	return uuid.Parse(userID)
+	parsedUUID, err := uuid.Parse(userID)
+	if err != nil {
+		return uuid.Nil, errors.New("geçersiz kullanıcı kimliği UUID formatı")
+	}
+	return parsedUUID, nil
 }

@@ -311,7 +311,7 @@ func (h *DocumentHandler) UpdateDocument(c *gin.Context) {
 // @Failure 403 {object} ErrorResponse "Access denied"
 // @Failure 404 {object} ErrorResponse "Document not found"
 // @Failure 500 {object} ErrorResponse "Internal server error"
-// @Router/api/v1/documents/{id} [delete]
+// @Router /api/v1/documents/{id} [delete]
 func (h *DocumentHandler) DeleteDocument(c *gin.Context) {
 	docIDStr := c.Param("id")
 	docID, err := uuid.Parse(docIDStr)
