@@ -1,6 +1,9 @@
 package handlers
 
 import (
+	"bytes"
+	"encoding/json"
+	"io"
 	"log"
 	"net/http"
 	"time"
@@ -50,17 +53,18 @@ type DocumentVersionResponse struct {
 }
 
 type CreateDocumentRequest struct {
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	IsPublic    bool   `json:"is_public"`
+	Title       string          `json:"title"`
+	Description string          `json:"description"`
+	IsPublic    bool            `json:"is_public"`
+	Content     json.RawMessage `json:"content,omitempty"` // Quill Delta formatında içerik
 }
 
 type UpdateDocumentRequest struct {
-	Title       *string `json:"title"`
-	Description *string `json:"description"`
-	Content     []byte  `json:"content"`
-	IsPublic    *bool   `json:"is_public"`
-	Status      *string `json:"status"`
+	Title       *string         `json:"title"`
+	Description *string         `json:"description"`
+	Content     json.RawMessage `json:"content,omitempty"` // Değişiklik: []byte -> json.RawMessage, omitempty eklendi
+	IsPublic    *bool           `json:"is_public"`
+	Status      *string         `json:"status"`
 }
 
 func documentToResponse(doc *models.Document) DocumentResponse {
@@ -105,6 +109,18 @@ func versionsToResponses(versions []models.DocumentVersion) []DocumentVersionRes
 	return responses
 }
 
+func getBodyBytes(c *gin.Context) []byte {
+	if c.Request.Body != nil {
+		bodyBytes, err := io.ReadAll(c.Request.Body)
+		if err == nil {
+			// Body'yi tekrar okunabilir hale getirmek önemli
+			c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+			return bodyBytes
+		}
+	}
+	return nil
+}
+
 // CreateDocument creates a new document
 // @Tags Documents
 // @Summary Create a new document
@@ -126,47 +142,43 @@ func (h *DocumentHandler) CreateDocument(c *gin.Context) {
 
 	var request CreateDocumentRequest
 	if err := c.ShouldBindJSON(&request); err != nil {
+		// Hatanın detayını loglayalım
+		log.Printf("CreateDocument - ShouldBindJSON error: %v. Gelen veri: %s", err, string(getBodyBytes(c))) // Gelen veriyi logla
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Geçersiz istek formatı"})
 		return
 	}
 
-	// Use title from request or default
+	log.Printf("CreateDocument - Request bind edildi: %+v", request)
+	log.Printf("CreateDocument - Request.Content (json.RawMessage): %s", string(request.Content))
+
 	title := "Adsız Döküman"
 	if request.Title != "" {
 		title = request.Title
 	}
 
-	// Create default document content
-	emptyContent := []byte(`{
-		"metadata": {
-			"title": "` + title + `",
-			"author": "` + userID.String() + `",
-			"lastModified": "` + time.Now().Format(time.RFC3339) + `"
-		},
-		"content": [
-			{
-				"id": "paragraph-1",
-				"type": "paragraph",
-				"content": ""
-			}
-		]
-	}`)
+	var contentToSave []byte
+	if len(request.Content) > 0 && string(request.Content) != "null" { // "null" string'ini de kontrol et
+		contentToSave = request.Content // Doğrudan ata, zaten json.RawMessage []byte'tır
+	} else {
+		contentToSave = []byte(`{"ops":[{"insert":"\n"}]}`)
+	}
 
 	doc := &models.Document{
 		Title:       title,
 		Description: request.Description,
 		OwnerID:     userID,
-		Content:     emptyContent,
+		Content:     contentToSave,
 		Version:     1,
 		IsPublic:    request.IsPublic,
-		Status:      "draft",
+		Status:      "draft", // Status backend'de atanıyor, request'ten değil
 	}
 
 	if err := h.repo.Document.Create(doc); err != nil {
+		log.Printf("CreateDocument - repo.Document.Create error: %v", err)
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Belge oluşturulamadı: " + err.Error()})
 		return
 	}
-
+	log.Printf("CreateDocument - Belge başarıyla oluşturuldu: ID %s", doc.ID.String())
 	c.JSON(http.StatusCreated, documentToResponse(doc))
 }
 
@@ -228,6 +240,7 @@ func (h *DocumentHandler) GetDocument(c *gin.Context) {
 // @Failure 404 {object} ErrorResponse "Document not found"
 // @Failure 500 {object} ErrorResponse "Internal server error"
 // @Router /api/v1/documents/{id} [put]
+// Path: dione-docs-backend/internal/api/handlers/document_handler.go
 func (h *DocumentHandler) UpdateDocument(c *gin.Context) {
 	docIDStr := c.Param("id")
 	docID, err := uuid.Parse(docIDStr)
@@ -257,23 +270,51 @@ func (h *DocumentHandler) UpdateDocument(c *gin.Context) {
 	}
 
 	var updateRequest UpdateDocumentRequest
+	// Bind edilecek verinin bir kopyasını alalım, çünkü c.Request.Body sadece bir kez okunabilir.
+	var requestBodyBytes []byte
+	if c.Request.Body != nil {
+		requestBodyBytes, _ = io.ReadAll(c.Request.Body)
+	}
+	// Orijinal body'yi tekrar yerine koyalım ki ShouldBindJSON okuyabilsin
+	c.Request.Body = io.NopCloser(bytes.NewBuffer(requestBodyBytes))
+
 	if err := c.ShouldBindJSON(&updateRequest); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Geçersiz istek formatı"})
+		log.Printf("UpdateDocument - ShouldBindJSON error: %v. Gelen veri: %s", err, string(requestBodyBytes))
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Geçersiz istek formatı: " + err.Error()})
 		return
 	}
 
+	log.Printf("UpdateDocument - Request bind edildi: %+v", updateRequest)
+	if updateRequest.Content != nil {
+		log.Printf("UpdateDocument - Request.Content (json.RawMessage): %s", string(updateRequest.Content))
+	}
+
+	contentChanged := false
+	if updateRequest.Content != nil && len(updateRequest.Content) > 0 && string(updateRequest.Content) != "null" {
+		// Gelen json.RawMessage (yani []byte) ile mevcut []byte'ı karşılaştır.
+		// Eğer frontend boş bir delta için "{}" veya "{\"ops\":[]}" gibi bir şey gönderiyorsa,
+		// ve existingDoc.Content de benzer bir yapıdaysa, bu karşılaştırma doğru çalışmayabilir.
+		// Daha sağlam bir karşılaştırma için, her ikisini de unmarshal edip karşılaştırmak gerekebilir,
+		// ya da frontend'in "değişiklik yok" durumunda content'i göndermemesi sağlanabilir (`omitempty` sayesinde).
+		// Şimdilik basit byte karşılaştırması yapıyoruz.
+		if !bytes.Equal(updateRequest.Content, existingDoc.Content) {
+			contentChanged = true
+		}
+	}
+
 	// Save version if content changed
-	if len(updateRequest.Content) > 0 && string(updateRequest.Content) != string(existingDoc.Content) {
+	if contentChanged {
 		version := &models.DocumentVersion{
 			DocumentID: existingDoc.ID,
 			Version:    existingDoc.Version,
-			Content:    existingDoc.Content,
+			Content:    existingDoc.Content, // Önceki içeriği kaydet
 			ChangedBy:  userID,
 		}
 		if err := h.repo.Document.SaveVersion(version); err != nil {
 			log.Printf("Versiyon kaydedilemedi: %v", err)
 		}
 		existingDoc.Version++
+		existingDoc.Content = updateRequest.Content // Yeni içeriği ata (json.RawMessage zaten []byte)
 	}
 
 	if updateRequest.Title != nil {
@@ -282,9 +323,17 @@ func (h *DocumentHandler) UpdateDocument(c *gin.Context) {
 	if updateRequest.Description != nil {
 		existingDoc.Description = *updateRequest.Description
 	}
-	if len(updateRequest.Content) > 0 {
-		existingDoc.Content = updateRequest.Content
-	}
+	// Content güncellemesi yukarıda contentChanged bloğunda yapıldı.
+	// Eğer content gönderilmediyse (omitempty sayesinde updateRequest.Content nil ise) veya aynıysa,
+	// existingDoc.Content değiştirilmeyecek.
+	// Eğer content alanı zorunluysa ve her zaman güncellenmesi gerekiyorsa, bu mantık değişmeli.
+	// Mevcut durumda content'i sadece değişmişse güncelliyoruz.
+	// Eğer frontend her zaman content gönderiyorsa (boş delta bile olsa),
+	// ve `omitempty` kullanılmıyorsa, o zaman aşağıdaki gibi direkt atama yapılabilir:
+	// if updateRequest.Content != nil {
+	// 	existingDoc.Content = updateRequest.Content
+	// }
+
 	if updateRequest.IsPublic != nil {
 		existingDoc.IsPublic = *updateRequest.IsPublic
 	}
@@ -293,10 +342,11 @@ func (h *DocumentHandler) UpdateDocument(c *gin.Context) {
 	}
 
 	if err := h.repo.Document.Update(&existingDoc); err != nil {
+		log.Printf("UpdateDocument - repo.Document.Update error: %v", err)
 		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Belge güncellenemedi: " + err.Error()})
 		return
 	}
-
+	log.Printf("UpdateDocument - Belge başarıyla güncellendi: ID %s", existingDoc.ID.String())
 	c.JSON(http.StatusOK, documentToResponse(&existingDoc))
 }
 
