@@ -64,32 +64,3 @@ func (r *documentRepo) GetVersions(documentID uuid.UUID) ([]models.DocumentVersi
 	}
 	return versions, nil
 }
-
-func (r *permissionRepo) GetByDocumentAndUser(documentID, userID uuid.UUID) (*models.Permission, error) {
-	var permission models.Permission
-	if err := r.db.Where("document_id = ? AND user_id = ?", documentID, userID).
-		First(&permission).Error; err != nil {
-		return nil, err
-	}
-	return &permission, nil
-}
-
-func (r *permissionRepo) GetByDocument(documentID uuid.UUID) ([]models.Permission, error) {
-	var permissions []models.Permission
-	if err := r.db.Where("document_id = ?", documentID).
-		Find(&permissions).Error; err != nil {
-		return nil, err
-	}
-	return permissions, nil
-}
-
-func (r *permissionRepo) UpdateAccessType(permissionID uuid.UUID, accessType string) error {
-	return r.db.Model(&models.Permission{}).
-		Where("id = ?", permissionID).
-		Update("access_type", accessType).Error
-}
-
-func (r *permissionRepo) DeleteByDocumentAndUser(documentID, userID uuid.UUID) error {
-	return r.db.Where("document_id = ? AND user_id = ?", documentID, userID).
-		Delete(&models.Permission{}).Error
-}

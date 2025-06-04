@@ -73,23 +73,25 @@ func (r *Router) setupRoutes() {
 		docs := apiAuth.Group("/documents")
 		{
 			docs.POST("", docHandler.CreateDocument)
-			docs.GET("/user", docHandler.GetUserDocuments) // Changed path based on previous handler code
+			docs.GET("/user", docHandler.GetUserDocuments)
 			docs.GET("/:id", docHandler.GetDocument)
+
+			docs.POST("/:id/permissions/share", permHandler.ShareDocument)
+			docs.POST("/:id/permissions/remove", permHandler.RemoveAccess)
+			docs.GET("/:id/permissions", permHandler.GetDocumentPermissions)
+
 			docs.PUT("/:id", docHandler.UpdateDocument)
 			docs.DELETE("/:id", docHandler.DeleteDocument)
 			docs.GET("/:id/versions", docHandler.GetDocumentVersions)
 		}
 
-		// Permission Routes (assuming they need auth too)
-		perms := apiAuth.Group("/permissions")
+		invitations := apiAuth.Group("/invitations")
 		{
-			// Note: Path slightly differs from previous swagger/handler code, adjust if needed
-			perms.POST("/documents/:id/share", permHandler.ShareDocument)
-			perms.DELETE("/documents/:id/access", permHandler.RemoveAccess)
-			perms.GET("/documents/:id", permHandler.GetDocumentPermissions)
+			invitations.GET("/pending", permHandler.GetPendingInvitations)
+			invitations.POST("/:invitation_id/accept", permHandler.AcceptInvitation)
+			invitations.POST("/:invitation_id/reject", permHandler.RejectInvitation)
 		}
 
-		// Import Route <-- New
 		imp := apiAuth.Group("/import")
 		{
 			imp.POST("/docx", importHandler.ImportDocxHandler)
