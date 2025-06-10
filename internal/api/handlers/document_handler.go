@@ -261,7 +261,10 @@ func (h *DocumentHandler) UpdateDocument(c *gin.Context) {
 		return
 	}
 
-	if existingDoc.OwnerID != userID {
+	permission := &models.Permission{}
+	permission, _ = h.repo.Permission.GetAcceptedByDocumentAndUser(docID, userID)
+
+	if permission.AccessType != string(models.AccessTypeEditor) && permission.AccessType != string(models.AccessTypeAdmin) {
 		permission, err := h.repo.Permission.GetByDocumentAndUser(docID, userID)
 		if err != nil || permission == nil || (permission.AccessType != "edit" && permission.AccessType != "admin") {
 			c.JSON(http.StatusForbidden, ErrorResponse{Error: "Bu belgeyi düzenleme izniniz yok"})

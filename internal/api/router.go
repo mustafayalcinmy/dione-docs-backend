@@ -69,6 +69,8 @@ func (r *Router) setupRoutes() {
 	// Apply JWT middleware to this group
 	apiAuth.Use(middleware.JWTMiddleware(r.config)) // Make sure JWTMiddleware exists and is configured
 	{
+
+		apiAuth.GET("/me", authHandler.GetCurrentUser)
 		// Document Routes
 		docs := apiAuth.Group("/documents")
 		{

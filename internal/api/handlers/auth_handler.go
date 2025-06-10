@@ -7,6 +7,7 @@ import (
 	"github.com/dione-docs-backend/internal/config"
 	"github.com/dione-docs-backend/internal/models"
 	"github.com/dione-docs-backend/internal/repository"
+	"github.com/dione-docs-backend/internal/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt"
 	"github.com/google/uuid"
@@ -34,6 +35,12 @@ type RegisterRequest struct {
 	Username string `json:"username" binding:"required"`
 	Email    string `json:"email" binding:"required,email"`
 	Password string `json:"password" binding:"required,min=8"`
+}
+
+type UserResponse struct {
+	UserId   string `json:"userId"`
+	Email    string `json:"email"`
+	FullName string `json:"fullName"`
 }
 
 type LoginResponse struct {
@@ -143,4 +150,36 @@ func (h *AuthHandler) RegisterHandler(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, RegisterResponse{Token: tokenString})
+}
+
+// GetCurrentUser godoc
+// @Summary Get current user info
+// @Description Returns the current authenticated user's information
+// @Tags Auth
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} UserResponse
+// @Failure 401 {object} ErrorResponse "Unauthorized"
+// @Router /api/v1/me [get]
+func (h *AuthHandler) GetCurrentUser(c *gin.Context) {
+	// JWT middleware'den user_id'yi al
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, ErrorResponse{Error: "Unauthorized"})
+		return
+	}
+
+	// Kullanıcıyı veritabanından al
+	var user models.User
+	if err := h.repo.User.GetByID(userID, &user); err != nil {
+		c.JSON(http.StatusNotFound, ErrorResponse{Error: "User not found"})
+		return
+	}
+
+	// Kullanıcı bilgilerini dön
+	c.JSON(http.StatusOK, UserResponse{
+		UserId:   user.ID.String(),
+		Email:    user.Email,
+		FullName: user.Username, // Eğer User model'inde FullName field'ı varsa onu kullan
+	})
 }
