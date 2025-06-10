@@ -485,3 +485,56 @@ func (h *DocumentHandler) GetDocumentVersions(c *gin.Context) {
 
 	c.JSON(http.StatusOK, versionsToResponses(versions))
 }
+
+type UpdateContentRequest struct {
+	Content json.RawMessage `json:"content"`
+}
+
+// UpdateDocumentContent sadece dokümanın içeriğini günceller.
+// ShareDB servisinden gelen istekleri karşılamak için kullanılır.
+func (h *DocumentHandler) UpdateDocumentContent(c *gin.Context) {
+	docIDStr := c.Param("id")
+	docID, err := uuid.Parse(docIDStr)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Geçersiz belge ID'si"})
+		return
+	}
+
+	var existingDoc models.Document
+	if err := h.repo.Document.GetByID(docID, &existingDoc); err != nil {
+		c.JSON(http.StatusNotFound, ErrorResponse{Error: "Belge bulunamadı"})
+		return
+	}
+
+	var req UpdateContentRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Geçersiz içerik formatı"})
+		return
+	}
+
+	if req.Content == nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "İçerik boş olamaz"})
+		return
+	}
+
+	if !bytes.Equal(req.Content, existingDoc.Content) {
+		version := &models.DocumentVersion{
+			DocumentID: existingDoc.ID,
+			Version:    existingDoc.Version,
+			Content:    existingDoc.Content,
+			ChangedBy:  uuid.Nil, // Sistemi temsil eden Nil UUID kullanılabilir
+		}
+		if err := h.repo.Document.SaveVersion(version); err != nil {
+			log.Printf("Versiyon kaydedilemedi: %v", err)
+		}
+		existingDoc.Version++
+		existingDoc.Content = req.Content
+	}
+
+	if err := h.repo.Document.Update(&existingDoc); err != nil {
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Belge içeriği güncellenemedi: " + err.Error()})
+		return
+	}
+
+	c.JSON(http.StatusOK, gin.H{"message": "İçerik başarıyla güncellendi"})
+}
