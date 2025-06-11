@@ -84,6 +84,7 @@ func (r *Router) setupRoutes() {
 			docs.POST("/:id/permissions/share", permHandler.ShareDocument)
 			docs.POST("/:id/permissions/remove", permHandler.RemoveAccess)
 			docs.GET("/:id/permissions", permHandler.GetDocumentPermissions)
+			docs.GET("/:id/role", permHandler.GetUserDocumentPermission)
 		}
 
 		invitations := apiAuth.Group("/invitations")

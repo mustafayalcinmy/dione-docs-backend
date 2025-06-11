@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"log"
 	"net/http"
 	"time"
@@ -10,6 +11,7 @@ import (
 	"github.com/dione-docs-backend/internal/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"gorm.io/gorm"
 )
 
 // ShareDocumentRequest UserEmail ve AccessType alanlarını içerir.
@@ -521,4 +523,59 @@ func (h *PermissionHandler) RejectInvitation(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, MessageResponse{Message: "Davetiye başarıyla reddedildi."})
+}
+
+type GetUserDocumentPermissionRequest struct {
+	DocumentId string `json:"document_id" binding:"required"`
+}
+
+type GetUserDocumentPermissionResponse struct {
+	AccessType string `json:"access_type"`
+}
+
+// GetDocumentPermission godoc
+// @Summary      Get user's permission for a document
+// @Description  Retrieves the access type for the authenticated user on a specific document.
+// @Tags         permissions
+// @Accept       json
+// @Produce      json
+// @Param        permissionRequest body GetDocumentPermissionRequest true "Document ID"
+// @Success      200  {object}  GetDocumentPermissionResponse
+// @Failure      400  {object}  ErrorResponse "Invalid request format or invalid UUID"
+// @Failure      401  {object}  ErrorResponse "Unauthorized"
+// @Failure      404  {object}  ErrorResponse "Permission not found for this document"
+// @Failure      500  {object}  ErrorResponse "Internal server error"
+// @Router       /api/v1/permissions/document [post] // Örnek bir rota, kendi rotanızla güncelleyin
+func (h *PermissionHandler) GetUserDocumentPermission(c *gin.Context) {
+	userID, err := utils.GetUserIDFromContext(c)
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, ErrorResponse{Error: "Unauthorized"})
+		return
+	}
+
+	var permissionRequest GetUserDocumentPermissionRequest
+	if err := c.ShouldBindJSON(&permissionRequest); err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Geçersiz istek formatı: " + err.Error()})
+		return
+	}
+
+	documentUUID, err := uuid.Parse(permissionRequest.DocumentId)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Geçersiz doküman ID formatı."})
+		return
+	}
+
+	permission, err := h.repo.Permission.GetByDocumentAndUser(documentUUID, userID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			c.JSON(http.StatusNotFound, ErrorResponse{Error: "Bu doküman için yetkiniz bulunmamaktadır."})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, ErrorResponse{Error: "Yetki kontrolü sırasında bir hata oluştu."})
+		return
+	}
+
+	c.JSON(http.StatusOK, GetUserDocumentPermissionResponse{
+		AccessType: permission.AccessType,
+	})
 }
