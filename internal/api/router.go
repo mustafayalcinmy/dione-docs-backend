@@ -55,6 +55,8 @@ func (r *Router) setupRoutes() {
 	permHandler := handlers.NewPermissionHandler(r.repository)
 	importHandler := handlers.NewImportHandler(importService)
 
+	hubManager := handlers.NewHubManager(r.repository.Document)
+
 	// Public routes
 	apiPublic := r.engine.Group("/api/v1")
 	{
@@ -68,17 +70,17 @@ func (r *Router) setupRoutes() {
 	{
 
 		apiAuth.GET("/me", authHandler.GetCurrentUser)
+		apiAuth.GET("/ws/documents/:id", hubManager.ServeWs)
 		// Document Routes
 		docs := apiAuth.Group("/documents")
 		{
 			docs.POST("", docHandler.CreateDocument)
 			docs.GET("/user", docHandler.GetUserDocuments)
 			docs.GET("/:id", docHandler.GetDocument)
-			docs.PUT("/:id", docHandler.UpdateDocument)    // Tek bir PUT kaydı
-			docs.DELETE("/:id", docHandler.DeleteDocument) // Tek bir DELETE kaydı
+			docs.PUT("/:id", docHandler.UpdateDocument)
+			docs.DELETE("/:id", docHandler.DeleteDocument)
 			docs.GET("/:id/versions", docHandler.GetDocumentVersions)
 
-			// Permission-related routes for a document
 			docs.POST("/:id/permissions/share", permHandler.ShareDocument)
 			docs.POST("/:id/permissions/remove", permHandler.RemoveAccess)
 			docs.GET("/:id/permissions", permHandler.GetDocumentPermissions)
@@ -97,13 +99,11 @@ func (r *Router) setupRoutes() {
 		}
 	}
 
-	// Internal API routes (only accessible from other services)
 	apiInternal := r.engine.Group("/api/v1/internal")
 	apiInternal.Use(middleware.InternalAPIMiddleware(r.config))
 	{
 		docsInternal := apiInternal.Group("/documents")
 		{
-			// This route is for ShareDB service to update content
 			docsInternal.PUT("/:id/content", docHandler.UpdateDocumentContent)
 		}
 	}

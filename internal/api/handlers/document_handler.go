@@ -240,7 +240,6 @@ func (h *DocumentHandler) GetDocument(c *gin.Context) {
 // @Failure 404 {object} ErrorResponse "Document not found"
 // @Failure 500 {object} ErrorResponse "Internal server error"
 // @Router /api/v1/documents/{id} [put]
-// Path: dione-docs-backend/internal/api/handlers/document_handler.go
 func (h *DocumentHandler) UpdateDocument(c *gin.Context) {
 	docIDStr := c.Param("id")
 	docID, err := uuid.Parse(docIDStr)
@@ -261,24 +260,30 @@ func (h *DocumentHandler) UpdateDocument(c *gin.Context) {
 		return
 	}
 
-	permission := &models.Permission{}
-	permission, _ = h.repo.Permission.GetAcceptedByDocumentAndUser(docID, userID)
+	isOwner := existingDoc.OwnerID == userID
+	canEdit := false
 
-	if permission.AccessType != string(models.AccessTypeEditor) && permission.AccessType != string(models.AccessTypeAdmin) {
-		permission, err := h.repo.Permission.GetByDocumentAndUser(docID, userID)
-		if err != nil || permission == nil || (permission.AccessType != "edit" && permission.AccessType != "admin") {
-			c.JSON(http.StatusForbidden, ErrorResponse{Error: "Bu belgeyi düzenleme izniniz yok"})
-			return
+	if isOwner {
+		canEdit = true
+	} else {
+		permission, err := h.repo.Permission.GetAcceptedByDocumentAndUser(docID, userID)
+		if err == nil && permission != nil {
+			if permission.AccessType == string(models.AccessTypeEditor) || permission.AccessType == string(models.AccessTypeAdmin) {
+				canEdit = true
+			}
 		}
 	}
 
+	if !canEdit {
+		c.JSON(http.StatusForbidden, ErrorResponse{Error: "Bu belgeyi düzenleme izniniz yok"})
+		return
+	}
+
 	var updateRequest UpdateDocumentRequest
-	// Bind edilecek verinin bir kopyasını alalım, çünkü c.Request.Body sadece bir kez okunabilir.
 	var requestBodyBytes []byte
 	if c.Request.Body != nil {
 		requestBodyBytes, _ = io.ReadAll(c.Request.Body)
 	}
-	// Orijinal body'yi tekrar yerine koyalım ki ShouldBindJSON okuyabilsin
 	c.Request.Body = io.NopCloser(bytes.NewBuffer(requestBodyBytes))
 
 	if err := c.ShouldBindJSON(&updateRequest); err != nil {
@@ -294,30 +299,23 @@ func (h *DocumentHandler) UpdateDocument(c *gin.Context) {
 
 	contentChanged := false
 	if updateRequest.Content != nil && len(updateRequest.Content) > 0 && string(updateRequest.Content) != "null" {
-		// Gelen json.RawMessage (yani []byte) ile mevcut []byte'ı karşılaştır.
-		// Eğer frontend boş bir delta için "{}" veya "{\"ops\":[]}" gibi bir şey gönderiyorsa,
-		// ve existingDoc.Content de benzer bir yapıdaysa, bu karşılaştırma doğru çalışmayabilir.
-		// Daha sağlam bir karşılaştırma için, her ikisini de unmarshal edip karşılaştırmak gerekebilir,
-		// ya da frontend'in "değişiklik yok" durumunda content'i göndermemesi sağlanabilir (`omitempty` sayesinde).
-		// Şimdilik basit byte karşılaştırması yapıyoruz.
 		if !bytes.Equal(updateRequest.Content, existingDoc.Content) {
 			contentChanged = true
 		}
 	}
 
-	// Save version if content changed
 	if contentChanged {
 		version := &models.DocumentVersion{
 			DocumentID: existingDoc.ID,
 			Version:    existingDoc.Version,
-			Content:    existingDoc.Content, // Önceki içeriği kaydet
+			Content:    existingDoc.Content,
 			ChangedBy:  userID,
 		}
 		if err := h.repo.Document.SaveVersion(version); err != nil {
 			log.Printf("Versiyon kaydedilemedi: %v", err)
 		}
 		existingDoc.Version++
-		existingDoc.Content = updateRequest.Content // Yeni içeriği ata (json.RawMessage zaten []byte)
+		existingDoc.Content = updateRequest.Content
 	}
 
 	if updateRequest.Title != nil {
@@ -326,17 +324,6 @@ func (h *DocumentHandler) UpdateDocument(c *gin.Context) {
 	if updateRequest.Description != nil {
 		existingDoc.Description = *updateRequest.Description
 	}
-	// Content güncellemesi yukarıda contentChanged bloğunda yapıldı.
-	// Eğer content gönderilmediyse (omitempty sayesinde updateRequest.Content nil ise) veya aynıysa,
-	// existingDoc.Content değiştirilmeyecek.
-	// Eğer content alanı zorunluysa ve her zaman güncellenmesi gerekiyorsa, bu mantık değişmeli.
-	// Mevcut durumda content'i sadece değişmişse güncelliyoruz.
-	// Eğer frontend her zaman content gönderiyorsa (boş delta bile olsa),
-	// ve `omitempty` kullanılmıyorsa, o zaman aşağıdaki gibi direkt atama yapılabilir:
-	// if updateRequest.Content != nil {
-	// 	existingDoc.Content = updateRequest.Content
-	// }
-
 	if updateRequest.IsPublic != nil {
 		existingDoc.IsPublic = *updateRequest.IsPublic
 	}
@@ -490,8 +477,6 @@ type UpdateContentRequest struct {
 	Content json.RawMessage `json:"content"`
 }
 
-// UpdateDocumentContent sadece dokümanın içeriğini günceller.
-// ShareDB servisinden gelen istekleri karşılamak için kullanılır.
 func (h *DocumentHandler) UpdateDocumentContent(c *gin.Context) {
 	docIDStr := c.Param("id")
 	docID, err := uuid.Parse(docIDStr)
