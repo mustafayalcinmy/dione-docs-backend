@@ -553,13 +553,13 @@ func (h *PermissionHandler) GetUserDocumentPermission(c *gin.Context) {
 		return
 	}
 
-	var permissionRequest GetUserDocumentPermissionRequest
-	if err := c.ShouldBindJSON(&permissionRequest); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Geçersiz istek formatı: " + err.Error()})
+	docIdParam := c.Param("id")
+	if docIdParam == "" {
+		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Doküman ID belirtilmemiş."})
 		return
 	}
 
-	documentUUID, err := uuid.Parse(permissionRequest.DocumentId)
+	documentUUID, err := uuid.Parse(docIdParam)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{Error: "Geçersiz doküman ID formatı."})
 		return
@@ -568,6 +568,16 @@ func (h *PermissionHandler) GetUserDocumentPermission(c *gin.Context) {
 	permission, err := h.repo.Permission.GetByDocumentAndUser(documentUUID, userID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
+			var doc models.Document
+			if h.repo.Document.GetByID(documentUUID, &doc) == nil {
+				if doc.OwnerID == userID {
+					c.JSON(http.StatusOK, GetUserDocumentPermissionResponse{
+						AccessType: "owner",
+					})
+					return
+				}
+			}
+
 			c.JSON(http.StatusNotFound, ErrorResponse{Error: "Bu doküman için yetkiniz bulunmamaktadır."})
 			return
 		}
