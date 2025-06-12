@@ -55,7 +55,10 @@ func (r *Router) setupRoutes() {
 	permHandler := handlers.NewPermissionHandler(r.repository)
 	importHandler := handlers.NewImportHandler(importService)
 
-	hubManager := handlers.NewHubManager(r.repository.Document)
+	otHubManager := handlers.NewHubManager(r.repository.Document)
+
+	chatHubManager := handlers.NewChatHubManager(r.repository)
+	chatHandler := handlers.NewChatHandler(r.repository, chatHubManager, r.config)
 
 	// Public routes
 	apiPublic := r.engine.Group("/api/v1")
@@ -68,9 +71,12 @@ func (r *Router) setupRoutes() {
 	apiAuth := r.engine.Group("/api/v1")
 	apiAuth.Use(middleware.JWTMiddleware(r.config))
 	{
-
 		apiAuth.GET("/me", authHandler.GetCurrentUser)
-		apiAuth.GET("/ws/documents/:id", hubManager.ServeWs)
+
+		apiAuth.GET("/ws/documents/:id", otHubManager.ServeWs)
+
+		apiAuth.GET("/ws/chat/documents/:id", chatHandler.ServeChatWs)
+
 		// Document Routes
 		docs := apiAuth.Group("/documents")
 		{
@@ -80,6 +86,9 @@ func (r *Router) setupRoutes() {
 			docs.PUT("/:id", docHandler.UpdateDocument)
 			docs.DELETE("/:id", docHandler.DeleteDocument)
 			docs.GET("/:id/versions", docHandler.GetDocumentVersions)
+
+			// YENİ: Chat geçmişini getirmek için REST endpoint'i
+			docs.GET("/:id/messages", chatHandler.GetMessages)
 
 			docs.POST("/:id/permissions/share", permHandler.ShareDocument)
 			docs.POST("/:id/permissions/remove", permHandler.RemoveAccess)
