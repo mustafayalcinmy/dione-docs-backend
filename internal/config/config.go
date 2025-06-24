@@ -18,6 +18,7 @@ type Config struct {
 	DBSSLMode          string
 	JWTSecret          string `mapstructure:"JWT_SECRET"`
 	InternalApiKey     string `mapstructure:"INTERNAL_API_KEY"`
+	PythonServiceURL   string `mapstructure:"PYTHON_SERVICE_URL"`
 	GoogleClientID     string `mapstructure:"GOOGLE_CLIENT_ID"`
 	GoogleClientSecret string `mapstructure:"GOOGLE_CLIENT_SECRET"`
 	GoogleRedirectURL  string `mapstructure:"GOOGLE_REDIRECT_URL"`
@@ -30,15 +31,16 @@ func LoadConfig() (*Config, error) {
 	}
 
 	config := &Config{
-		Port:           os.Getenv("PORT"),
-		DBHost:         os.Getenv("DB_HOST"),
-		DBPort:         os.Getenv("DB_PORT"),
-		DBUser:         os.Getenv("DB_USER"),
-		DBPass:         os.Getenv("DB_PASS"),
-		DBName:         os.Getenv("DB_NAME"),
-		DBSSLMode:      os.Getenv("DB_SSLMODE"),
-		JWTSecret:      os.Getenv("JWT_SECRET"),
-		InternalApiKey: os.Getenv("INTERNAL_API_KEY"),
+		Port:             os.Getenv("PORT"),
+		DBHost:           os.Getenv("DB_HOST"),
+		DBPort:           os.Getenv("DB_PORT"),
+		DBUser:           os.Getenv("DB_USER"),
+		DBPass:           os.Getenv("DB_PASS"),
+		DBName:           os.Getenv("DB_NAME"),
+		DBSSLMode:        os.Getenv("DB_SSLMODE"),
+		JWTSecret:        os.Getenv("JWT_SECRET"),
+		InternalApiKey:   os.Getenv("INTERNAL_API_KEY"),
+		PythonServiceURL: os.Getenv("PYTHON_SERVICE_URL"),
 	}
 
 	return config, nil

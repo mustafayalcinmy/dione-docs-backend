@@ -4,7 +4,6 @@ import (
 	"github.com/dione-docs-backend/internal/api/handlers"
 	middleware "github.com/dione-docs-backend/internal/api/middlewares"
 	"github.com/dione-docs-backend/internal/config"
-	"github.com/dione-docs-backend/internal/parser/docx"
 	"github.com/dione-docs-backend/internal/repository"
 	"github.com/dione-docs-backend/internal/services"
 	"github.com/gin-gonic/gin"
@@ -44,10 +43,7 @@ func (r *Router) setupMiddlewares() {
 }
 
 func (r *Router) setupRoutes() {
-	// Instantiate Parsers
-	docxParser := docx.NewManualParser()
-	// Instantiate Services
-	importService := services.NewImportService(r.repository.Document, docxParser)
+	importService := services.NewImportService(r.repository.Document, r.config)
 
 	// Instantiate Handlers
 	authHandler := handlers.NewAuthHandler(r.repository, r.config)

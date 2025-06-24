@@ -1,124 +1,88 @@
 package services
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
-	"log" // Make sure log package is imported
+	"log"
+	"mime/multipart"
+	"net/http"
 
-	"github.com/dione-docs-backend/internal/models"     // Adjust import path
-	"github.com/dione-docs-backend/internal/parser"     // Adjust import path
-	"github.com/dione-docs-backend/internal/repository" // Adjust import path
+	"github.com/dione-docs-backend/internal/config"
+	"github.com/dione-docs-backend/internal/models"
+	"github.com/dione-docs-backend/internal/repository"
 	"github.com/google/uuid"
 )
 
-// ImportService handles the logic for importing documents.
 type ImportService struct {
 	docRepo repository.DocumentRepository
-	// Use the specific parser type or the interface
-	// Example using the interface:
-	theParser parser.Parser
-	// Example using concrete type if not using interface:
-	// theParser *docx.manualParser
+	cfg     *config.Config
 }
 
-// NewImportService creates a new ImportService.
-func NewImportService(docRepo repository.DocumentRepository, p parser.Parser) *ImportService {
+func NewImportService(docRepo repository.DocumentRepository, cfg *config.Config) *ImportService {
 	return &ImportService{
-		docRepo:   docRepo,
-		theParser: p,
+		docRepo: docRepo,
+		cfg:     cfg,
 	}
 }
 
-// ImportDocument orchestrates the document import process.
-// Modify signature based on how you handle file path vs reader
-func (s *ImportService) ImportDocument(ctx context.Context, userID uuid.UUID, reader io.ReaderAt, size int64, fileType string, originalFilename string) (*models.Document, error) {
-
-	var parsedData *models.ParsedContent
-	var err error
-
-	// --- Step 1: Call the Parser ---
-	log.Printf("Calling parser for file: %s", originalFilename)
-	switch fileType {
-	case "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-		// --- Use the correct arguments for the manual parser ---
-		parsedData, err = s.theParser.Parse(reader, size) // <-- Corrected this line
-	default:
-		return nil, fmt.Errorf("unsupported file type for import: %s", fileType)
-	}
-
+func (s *ImportService) ImportDocument(ctx context.Context, userID uuid.UUID, fileReader io.Reader, originalFilename string) (*models.Document, error) {
+	body := &bytes.Buffer{}
+	writer := multipart.NewWriter(body)
+	part, err := writer.CreateFormFile("file", originalFilename)
 	if err != nil {
-		// Make sure parser errors are logged/returned clearly
-		log.Printf("!!! Parser returned error: %v", err)
-		return nil, fmt.Errorf("failed to parse file: %w", err)
+		return nil, fmt.Errorf("failed to create form file: %w", err)
 	}
-	if parsedData == nil {
-		// Parser might succeed but return nil data
-		log.Printf("!!! Parser returned nil data")
-		return nil, fmt.Errorf("parser returned nil data")
+	if _, err := io.Copy(part, fileReader); err != nil {
+		return nil, fmt.Errorf("failed to copy file content to form: %w", err)
 	}
+	writer.Close()
 
-	// --- Step 2: Check and Log Parser Output ---
-	// Check if the parser actually returned content. The JSON log added
-	// previously in the parser itself should also show this.
-	if len(parsedData.Content) == 0 {
-		log.Println("!!! Warning: Parser returned ParsedContent with zero Content nodes.")
-	} else {
-		log.Printf("--- Parser returned ParsedContent with %d top-level nodes ---", len(parsedData.Content))
-	}
-
-	// --- Step 3: Marshal Parsed Data and Log Result ---
-	log.Println("--- Marshaling ParsedContent to JSON ---")
-	contentBytes, err := json.Marshal(parsedData.Content)
+	req, err := http.NewRequestWithContext(ctx, "POST", s.cfg.PythonServiceURL, body)
 	if err != nil {
-		// Log the error clearly if marshaling fails
-		log.Printf("!!! Error marshaling ParsedContent: %v", err)
-		return nil, fmt.Errorf("failed to marshal parsed content to JSON: %w", err)
+		return nil, fmt.Errorf("failed to create request for python service: %w", err)
 	}
-	// Log the marshaled bytes (or their length)
-	log.Printf("--- Marshaled JSON Bytes Length: %d ---", len(contentBytes))
-	if len(contentBytes) < 500 { // Log short content for inspection
-		log.Printf("--- Marshaled JSON Bytes Content: %s ---", string(contentBytes))
+	req.Header.Set("Content-Type", writer.FormDataContentType())
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request to python service: %w", err)
 	}
-	if len(contentBytes) == 0 || string(contentBytes) == "null" || string(contentBytes) == "{}" {
-		log.Println("!!! Warning: Marshaled content bytes are empty or represent empty/null JSON!")
+	defer resp.Body.Close()
+
+	// Python'dan gelen yanıtı oku.
+	bodyBytes, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("failed to read response body from python service: %w", err)
 	}
 
-	// --- Step 4: Prepare Document Model ---
-	log.Println("--- Preparing Document model for database ---")
-	// TODO: Extract title better if possible
-	title := originalFilename // Placeholder
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("python service returned non-200 status: %d - %s", resp.StatusCode, string(bodyBytes))
+	}
+
+	finalContentForDB, err := json.Marshal(string(bodyBytes))
+	if err != nil {
+		return nil, fmt.Errorf("failed to create the final escaped-json string: %w", err)
+	}
+
+	log.Printf("--- Successfully created the final 'escaped string' format for DB. ---")
 
 	doc := &models.Document{
-		Title:       title,
-		Description: "Imported document",
+		Title:       originalFilename,
+		Description: "Imported document from " + originalFilename,
 		OwnerID:     userID,
-		Content:     contentBytes, // Assign the marshaled bytes
+		Content:     finalContentForDB,
 		Version:     1,
 		IsPublic:    false,
 		Status:      "draft",
 	}
 
-	// --- Step 5: Log Document Just Before Saving ---
-	previewLen := 100
-	if len(doc.Content) < previewLen {
-		previewLen = len(doc.Content)
-	}
-	log.Printf("--- Document content length before save: %d ---", len(doc.Content))
-	log.Printf("--- Document content preview before save: %s ---", string(doc.Content[:previewLen]))
-	if len(doc.Content) == 0 {
-		log.Println("!!! Error: Document Content field is empty before calling Create!")
-	}
-
-	// --- Step 6: Save to Database and Check Error ---
-	log.Println("--- Calling docRepo.Create ---")
 	if err := s.docRepo.Create(doc); err != nil {
-		// Log the specific error from the database operation
-		log.Printf("!!! Error calling docRepo.Create: %v", err)
 		return nil, fmt.Errorf("failed to save imported document: %w", err)
 	}
 
-	log.Println("--- Document saved successfully (ID: %s) ---", doc.ID)
+	log.Printf("--- Document saved successfully (ID: %s) ---", doc.ID)
 	return doc, nil
 }
